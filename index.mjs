@@ -1,14 +1,40 @@
 // index.mjs
 import { GoogleAuth } from "google-auth-library";
-// import { AnalyticsAdminServiceClient } from "@google-analytics/admin";
 import { v1alpha } from "@google-analytics/admin";
 import "dotenv/config";
 
-const PROPERTY_ID = process.env.GA4_PROPERTY_ID; // e.g., "properties/123456789"
-const TARGET_GROUP_DISPLAY_NAME = "Custom Channel Group";
+// --- tiny CLI flag parser (no deps) ---
+function getFlag(long, short) {
+  const argv = process.argv.slice(2);
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === long || a === short)
+      return argv[i + 1] && !argv[i + 1].startsWith("-") ? argv[i + 1] : "true";
+    if (a.startsWith(long + "=")) return a.split("=").slice(1).join("=");
+    if (short && a.startsWith(short + "="))
+      return a.split("=").slice(1).join("=");
+  }
+  return undefined;
+}
+
+// --- CLI overrides (fallback to env) ---
+const CLI_PROPERTY = getFlag("--property", "-p");
+const CLI_GROUP = getFlag("--group", "-g");
+
+const PROPERTY_ID = CLI_PROPERTY || process.env.GA4_PROPERTY_ID; // e.g., "properties/123456789"
+const TARGET_GROUP_DISPLAY_NAME = (CLI_GROUP || "Custom Channel Group").trim();
 
 if (!PROPERTY_ID) {
-  console.error("Missing GA4_PROPERTY_ID (e.g., properties/123456789)");
+  console.error(
+    "Missing GA4 property id. Use --property=properties/123456789 or set GA4_PROPERTY_ID."
+  );
+  process.exit(1);
+}
+if (!PROPERTY_ID.startsWith("properties/")) {
+  console.error(
+    "GA4 property id must look like 'properties/123456789'. Got:",
+    PROPERTY_ID
+  );
   process.exit(1);
 }
 
@@ -57,19 +83,18 @@ const auth = new GoogleAuth({
   scopes: ["https://www.googleapis.com/auth/analytics.edit"],
   keyFile: process.env.GOOGLE_APPLICATION_CREDENTIALS, // optional if using ADC
 });
-// const client = new AnalyticsAdminServiceClient({ auth });
 const client = new v1alpha.AnalyticsAdminServiceClient({
   auth,
-  fallback: true, // use REST fallback
+  fallback: true,
 });
 
-// replace buildGroupingRule with this shape:
+// Build a "source CONTAINS value" rule (shape that worked for you)
 function buildGroupingRule({ displayName, fieldName, matchType, value }) {
-  // Convert field names to GA4 API expected format
+  // Map UI field to API field (your working mapping)
   const apiFieldName = fieldName === "source" ? "eachScopeSource" : fieldName;
 
-  // Convert match type to numeric value (based on the existing rules pattern)
-  const apiMatchType = matchType === "CONTAINS" ? 4 : 1; // CONTAINS = 4, EXACT = 1
+  // Map match type string to enum number (your working mapping)
+  const apiMatchType = matchType === "CONTAINS" ? 4 : 1; // CONTAINS=4, EXACT=1
 
   return {
     displayName,
@@ -84,7 +109,7 @@ function buildGroupingRule({ displayName, fieldName, matchType, value }) {
                     fieldName: apiFieldName,
                     stringFilter: {
                       matchType: apiMatchType,
-                      value: value,
+                      value,
                       caseSensitive: false,
                     },
                   },
@@ -114,10 +139,14 @@ function hasRuleByDisplayName(rules = [], name) {
 }
 
 async function appendAiChannels(propertyId) {
+  console.log(
+    `\n→ Property: ${propertyId}\n→ Channel Group: "${TARGET_GROUP_DISPLAY_NAME}"\n`
+  );
+
   const target = await findTargetChannelGroup(propertyId);
   if (!target) {
     throw new Error(
-      `Channel Group "${TARGET_GROUP_DISPLAY_NAME}" not found (or it's system-defined).`
+      `Channel Group "${TARGET_GROUP_DISPLAY_NAME}" not found (or it's system-defined) on ${propertyId}.`
     );
   }
 
@@ -135,12 +164,8 @@ async function appendAiChannels(propertyId) {
 
   const mergedRules = [...currentRules, ...toAdd];
 
-  // ✅ send the minimal payload (avoid echoing server-populated/immutable fields)
   const [resp] = await client.updateChannelGroup({
-    channelGroup: {
-      name: target.name, // e.g., "properties/123/channelGroups/456"
-      groupingRule: mergedRules, // merged rules only
-    },
+    channelGroup: { name: target.name, groupingRule: mergedRules },
     updateMask: { paths: ["grouping_rule"] },
   });
 
@@ -154,6 +179,13 @@ async function appendAiChannels(propertyId) {
     await appendAiChannels(PROPERTY_ID);
   } catch (err) {
     console.error("Error:", err?.message || err);
+    // Print more details if using REST fallback
+    if (err?.response?.data) {
+      console.error(
+        "Response data:",
+        JSON.stringify(err.response.data, null, 2)
+      );
+    }
     process.exit(1);
   }
 })();
