@@ -1,42 +1,60 @@
+#!/usr/bin/env node
+
 // index.mjs
 import { GoogleAuth } from "google-auth-library";
 import { v1alpha } from "@google-analytics/admin";
+import { Command } from "commander";
 import "dotenv/config";
 
-// --- tiny CLI flag parser (no deps) ---
-function getFlag(long, short) {
-  const argv = process.argv.slice(2);
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (a === long || a === short)
-      return argv[i + 1] && !argv[i + 1].startsWith("-") ? argv[i + 1] : "true";
-    if (a.startsWith(long + "=")) return a.split("=").slice(1).join("=");
-    if (short && a.startsWith(short + "="))
-      return a.split("=").slice(1).join("=");
-  }
-  return undefined;
-}
+const program = new Command();
 
-// --- CLI overrides (fallback to env) ---
-const CLI_PROPERTY = getFlag("--property", "-p");
-const CLI_GROUP = getFlag("--group", "-g");
+program
+  .name("gaaa")
+  .description("GA4 Admin - Manage GA4 custom channel groups")
+  .version("1.0.0")
+  .option(
+    "-p, --property <propertyId>",
+    "GA4 property ID (e.g., properties/123456789)"
+  )
+  .option(
+    "-g, --group <groupName>",
+    "Target channel group name",
+    "Custom Channel Group"
+  )
+  .action(async (options) => {
+    const PROPERTY_ID = options.property || process.env.GA4_PROPERTY_ID;
+    const TARGET_GROUP_DISPLAY_NAME = (
+      options.group || "Custom Channel Group"
+    ).trim();
 
-const PROPERTY_ID = CLI_PROPERTY || process.env.GA4_PROPERTY_ID; // e.g., "properties/123456789"
-const TARGET_GROUP_DISPLAY_NAME = (CLI_GROUP || "Custom Channel Group").trim();
+    if (!PROPERTY_ID) {
+      console.error(
+        "Missing GA4 property id. Use --property=properties/123456789 or set GA4_PROPERTY_ID."
+      );
+      process.exit(1);
+    }
+    if (!PROPERTY_ID.startsWith("properties/")) {
+      console.error(
+        "GA4 property id must look like 'properties/123456789'. Got:",
+        PROPERTY_ID
+      );
+      process.exit(1);
+    }
 
-if (!PROPERTY_ID) {
-  console.error(
-    "Missing GA4 property id. Use --property=properties/123456789 or set GA4_PROPERTY_ID."
-  );
-  process.exit(1);
-}
-if (!PROPERTY_ID.startsWith("properties/")) {
-  console.error(
-    "GA4 property id must look like 'properties/123456789'. Got:",
-    PROPERTY_ID
-  );
-  process.exit(1);
-}
+    try {
+      await appendAiChannels(PROPERTY_ID, TARGET_GROUP_DISPLAY_NAME);
+    } catch (err) {
+      console.error("Error:", err?.message || err);
+      // Print more details if using REST fallback
+      if (err?.response?.data) {
+        console.error(
+          "Response data:",
+          JSON.stringify(err.response.data, null, 2)
+        );
+      }
+      process.exit(1);
+    }
+  });
 
 // ---- Channel specs (extend as needed) ----
 const CHANNEL_SPECS = [
@@ -123,13 +141,13 @@ function buildGroupingRule({ displayName, fieldName, matchType, value }) {
   };
 }
 
-async function findTargetChannelGroup(propertyId) {
+async function findTargetChannelGroup(propertyId, targetGroupDisplayName) {
   const [groups] = await client.listChannelGroups({ parent: propertyId });
   return groups.find(
     (g) =>
       !g.systemDefined &&
       (g.displayName || "").toLowerCase() ===
-        TARGET_GROUP_DISPLAY_NAME.toLowerCase()
+        targetGroupDisplayName.toLowerCase()
   );
 }
 
@@ -138,15 +156,18 @@ function hasRuleByDisplayName(rules = [], name) {
   return rules.some((r) => (r.displayName || "").toLowerCase() === needle);
 }
 
-async function appendAiChannels(propertyId) {
+async function appendAiChannels(propertyId, targetGroupDisplayName) {
   console.log(
-    `\n→ Property: ${propertyId}\n→ Channel Group: "${TARGET_GROUP_DISPLAY_NAME}"\n`
+    `\n→ Property: ${propertyId}\n→ Channel Group: "${targetGroupDisplayName}"\n`
   );
 
-  const target = await findTargetChannelGroup(propertyId);
+  const target = await findTargetChannelGroup(
+    propertyId,
+    targetGroupDisplayName
+  );
   if (!target) {
     throw new Error(
-      `Channel Group "${TARGET_GROUP_DISPLAY_NAME}" not found (or it's system-defined) on ${propertyId}.`
+      `Channel Group "${targetGroupDisplayName}" not found (or it's system-defined) on ${propertyId}.`
     );
   }
 
@@ -173,19 +194,5 @@ async function appendAiChannels(propertyId) {
   toAdd.forEach((r) => console.log(`- ${r.displayName}`));
 }
 
-// ---- Run ----
-(async () => {
-  try {
-    await appendAiChannels(PROPERTY_ID);
-  } catch (err) {
-    console.error("Error:", err?.message || err);
-    // Print more details if using REST fallback
-    if (err?.response?.data) {
-      console.error(
-        "Response data:",
-        JSON.stringify(err.response.data, null, 2)
-      );
-    }
-    process.exit(1);
-  }
-})();
+// Parse command line arguments
+program.parse();

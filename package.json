@@ -1,16 +1,21 @@
 {
   "name": "ga4-admin",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "CLI tool for managing GA4 custom channel groups",
+  "main": "index.mjs",
+  "type": "module",
+  "bin": {
+    "gaaa": "./index.mjs"
+  },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
+  "keywords": ["ga4", "google-analytics", "cli", "channel-groups"],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "@google-analytics/admin": "^9.0.0",
+    "commander": "^14.0.0",
     "dotenv": "^17.2.1",
     "google-auth-library": "^10.3.0"
   }
