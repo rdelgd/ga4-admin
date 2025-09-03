@@ -9,7 +9,7 @@ import "dotenv/config";
 const program = new Command();
 
 program
-  .name("gaaa")
+  .name("gaaar")
   .description("GA4 Admin - Manage GA4 custom channel groups")
   .version("1.0.0")
   .option(

@@ -5,7 +5,7 @@
   "main": "index.mjs",
   "type": "module",
   "bin": {
-    "gaaa": "./index.mjs"
+    "gaaar": "./index.mjs"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"

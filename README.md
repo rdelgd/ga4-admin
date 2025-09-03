@@ -1,4 +1,4 @@
-# Google Analytics Automated Administration (`gaaa`)
+# Google Analytics Automated Administration and Reporting (`gaaar`)
 
 CLI tool to programmatically administer GA4 properties and manage custom channel groups.
 
@@ -8,39 +8,39 @@ CLI tool to programmatically administer GA4 properties and manage custom channel
 2. Install dependencies: `npm install`
 3. Install globally: `npm link`
 
-Now you can use the `gaaa` command from anywhere!
+Now you can use the `gaaar` command from anywhere!
 
 ## Usage
 
 ### Show help
 ```bash
-gaaa --help
+gaaar --help
 ```
 
 ### Use CLI to target a specific property
 ```bash
-gaaa --property properties/123456789
+gaaar --property properties/123456789
 ```
 
 ### Short flag works too
 ```bash
-gaaa -p properties/123456789
+gaaar -p properties/123456789
 ```
 
 ### Optional: override the group name
 ```bash
-gaaa -p properties/123456789 -g "Custom Channel Group"
+gaaar -p properties/123456789 -g "Custom Channel Group"
 ```
 
 ### Fall back to env var if GA4_PROPERTY_ID is set
 ```bash
 export GA4_PROPERTY_ID="properties/123456789"
-gaaa
+gaaar
 ```
 
 ### Show version
 ```bash
-gaaa --version
+gaaar --version
 ```
 
 ## What it does
