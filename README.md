@@ -1,4 +1,4 @@
-# GA4 Admin (`gaaa`)
+# GA4 Admin Tool (`gaaa`)
 
 CLI tool to programmatically administer GA4 properties and manage custom channel groups.
 
