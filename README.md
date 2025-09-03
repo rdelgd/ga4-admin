@@ -1,22 +1,63 @@
-# GA4 Admin 
-Node tool to programmatically administer GA4 properties. 
+# GA4 Admin (`gaaa`)
 
-## Use CLI to target a specific property
+CLI tool to programmatically administer GA4 properties and manage custom channel groups.
+
+## Installation
+
+1. Clone this repository
+2. Install dependencies: `npm install`
+3. Install globally: `npm link`
+
+Now you can use the `gaaa` command from anywhere!
+
+## Usage
+
+### Show help
 ```bash
-node index.mjs --property=properties/123456789
+gaaa --help
 ```
 
-## Short flag works too
+### Use CLI to target a specific property
 ```bash
-node index.mjs -p properties/123456789
+gaaa --property properties/123456789
 ```
 
-## Optional: override the group name
+### Short flag works too
 ```bash
-node index.mjs -p properties/123456789 -g "Custom Channel Group"
+gaaa -p properties/123456789
 ```
 
-## Fall back to env var (no CLI) if GA4_PROPERTY_ID is set
+### Optional: override the group name
 ```bash
-GA4_PROPERTY_ID="properties/123456789" node index.mjs
+gaaa -p properties/123456789 -g "Custom Channel Group"
 ```
+
+### Fall back to env var if GA4_PROPERTY_ID is set
+```bash
+export GA4_PROPERTY_ID="properties/123456789"
+gaaa
+```
+
+### Show version
+```bash
+gaaa --version
+```
+
+## What it does
+
+This tool adds AI-related traffic sources to your GA4 custom channel groups. It automatically creates channels for:
+
+- ChatGPT - AI
+- Perplexity - AI  
+- Gemini - AI
+- Copilot.microsoft - AI
+- Claude - AI
+- Meta - AI
+
+The tool will only add channels that don't already exist in your target channel group.
+
+## Requirements
+
+- Node.js
+- Google Analytics Admin API credentials
+- A GA4 property with a custom channel group
