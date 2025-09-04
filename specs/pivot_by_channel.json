@@ -1,0 +1,11 @@
+{
+  "reportType": "pivot",
+  "dimensions": ["sessionDefaultChannelGroup", "deviceCategory"],
+  "metrics": ["sessions"],
+  "dateRanges": [{ "startDate": "2025-08-01", "endDate": "2025-08-31" }],
+  "pivots": [
+    { "fieldNames": ["sessionDefaultChannelGroup"], "limit": 25 },
+    { "fieldNames": ["deviceCategory"], "limit": 10 }
+  ]
+}
+

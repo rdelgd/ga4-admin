@@ -1,0 +1,11 @@
+{
+  "reportType": "standard",
+  "dimensions": ["sessionDefaultChannelGroup", "source"],
+  "metrics": ["sessions", "totalUsers", "conversions"],
+  "dateRanges": [{ "startDate": "7daysAgo", "endDate": "yesterday" }],
+  "orderBys": [{ "metric": { "metricName": "sessions" }, "desc": true }],
+  "limit": 100000,
+  "keepEmptyRows": false,
+  "returnPropertyQuota": true
+}
+

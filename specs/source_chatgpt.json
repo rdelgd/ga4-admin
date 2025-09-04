@@ -1,0 +1,14 @@
+{
+  "reportType": "standard",
+  "dimensions": ["source", "country"],
+  "metrics": ["sessions", "totalUsers"],
+  "dateRanges": [{ "startDate": "30daysAgo", "endDate": "yesterday" }],
+  "dimensionFilter": {
+    "filter": {
+      "fieldName": "source",
+      "stringFilter": { "matchType": "CONTAINS", "value": "chatgpt" }
+    }
+  },
+  "limit": 100000
+}
+

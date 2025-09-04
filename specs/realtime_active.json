@@ -1,0 +1,6 @@
+{
+  "reportType": "realtime",
+  "dimensions": ["country", "deviceCategory"],
+  "metrics": ["activeUsers"]
+}
+
