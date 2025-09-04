@@ -1,6 +1,6 @@
 {
   "name": "gaaar",
-  "version": "0.0.3",
+  "version": "0.x.x",
   "description": "CLI tool for programmatically administering GA4 properties and creating reports",
   "main": "index.mjs",
   "type": "module",
