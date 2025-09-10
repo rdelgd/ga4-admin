@@ -116,6 +116,7 @@ gaaar --help
 
 - Node.js
 - Google Analytics Admin API credentials
+- Google Analytics Data API credentials  
 - A GA4 property with a custom channel group
 
 **Important:** See the `.env.example` file for detailed instructions on how to set up the required Google Cloud Platform (GCP) configurations, including service account setup, API enablement, and authentication credentials.
