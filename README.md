@@ -1,4 +1,4 @@
-# Google Analytics Automated Administration and Reporting (`gaaar`)
+# Google Analytics Administration, Analysis and Reporting (`gaaar`)
 
 CLI tool to programmatically administer GA4 properties and run custom reports with an "everything-as-code" approach.
 
