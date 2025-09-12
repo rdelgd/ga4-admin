@@ -8,6 +8,7 @@ import { fileURLToPath } from "url";
 import { GoogleAuth } from "google-auth-library";
 import { v1alpha } from "@google-analytics/admin";
 import { BetaAnalyticsDataClient } from "@google-analytics/data";
+import { BigQuery } from "@google-cloud/bigquery";
 import { Command } from "commander";
 import "dotenv/config";
 
@@ -320,11 +321,13 @@ function toCsv(dimHeaders, metHeaders, rows) {
   });
   return [header, ...lines].join("\n");
 }
+
 function csvEscape(s) {
   if (s == null) return "";
   const needs = /[",\n]/.test(s);
   return needs ? `"${s.replace(/"/g, '""')}"` : s;
 }
+
 function writeOut(content, outPath) {
   if (outPath) {
     fs.mkdirSync(path.dirname(outPath), { recursive: true });
@@ -334,6 +337,7 @@ function writeOut(content, outPath) {
     console.log(content);
   }
 }
+
 function tablePrint(dimHeaders, metHeaders, rows, maxRows = 50) {
   const dimNames = dimHeaders.map((h) => h.name);
   const metNames = metHeaders.map((h) => h.name);
@@ -456,6 +460,186 @@ async function runReportFromSpec({ spec, property, format, outPath }) {
       `Unknown reportType "${spec.reportType}". Use "standard", "pivot", or "realtime".`
     );
   }
+}
+
+/* -----------------------------------------------------------------------------
+ * Subcommand: bq  — run SQL on GA4 export and optionally materialize a table
+ * ---------------------------------------------------------------------------*/
+program
+  .command("bq")
+  .description(
+    "Run BigQuery SQL against GA4 export; optionally write results to a table"
+  )
+  .requiredOption("--project <projectId>", "GCP project that hosts the dataset")
+  .requiredOption(
+    "--dataset <dataset>",
+    "BigQuery dataset name (e.g., ga4_export)"
+  )
+  .option("--sql <path>", "Path to .sql file to run") // one of --sql or --query
+  .option("--query <text>", "Inline SQL to run") // one of --sql or --query
+  .option(
+    "--dest <table>",
+    "Destination table name to write results (CREATE TABLE AS SELECT)"
+  )
+  .option("--write <mode>", "append|truncate|empty", "append") // WRITE_APPEND/WRITE_TRUNCATE/WRITE_EMPTY
+  .option("--create <mode>", "ifneeded|never", "ifneeded") // CREATE_IF_NEEDED/CREATE_NEVER
+  .option("--location <loc>", "Dataset location, e.g. US/EU", "US")
+  .option(
+    "--from <YYYY-MM-DD>",
+    "Start date to compute _TABLE_SUFFIX (optional)"
+  )
+  .option("--to <YYYY-MM-DD>", "End date to compute _TABLE_SUFFIX (optional)")
+  .option(
+    "--include-intraday",
+    "Union today's events_intraday_* table if within range",
+    false
+  )
+  .option(
+    "--param <k=v...>",
+    "Add named parameter (repeatable)",
+    collectParams,
+    {}
+  )
+  .option("--dry-run", "Validate & estimate bytes without running", false)
+  .action(async (opts) => {
+    // --- validate inputs
+    if (!opts.sql && !opts.query) {
+      console.error('Provide either --sql <file.sql> or --query "..."');
+      process.exit(1);
+    }
+    const bigquery = new BigQuery({ projectId: opts.project });
+
+    // --- read SQL
+    let sql =
+      opts.query ??
+      (await fs.promises.readFile(path.resolve(opts.sql), "utf8"));
+
+    // --- perform template substitution for {{project}} and {{dataset}}
+    sql = sql.replace(/\{\{project\}\}/g, opts.project);
+    sql = sql.replace(/\{\{dataset\}\}/g, opts.dataset);
+
+    // --- compute optional suffix params for events_* wildcard queries
+    const suffixParams = buildSuffixParams(opts.from, opts.to);
+    const params = { ...opts.param, ...suffixParams };
+
+    // Prepare destination table reference (optional)
+    const datasetRef = bigquery.dataset(opts.dataset);
+    const destination = opts.dest ? datasetRef.table(opts.dest) : undefined;
+
+    // map write/create modes
+    const writeMap = {
+      append: "WRITE_APPEND",
+      truncate: "WRITE_TRUNCATE",
+      empty: "WRITE_EMPTY",
+    };
+    const createMap = { ifneeded: "CREATE_IF_NEEDED", never: "CREATE_NEVER" };
+
+    const jobOptions = {
+      query: sql,
+      params, // named params, use @param in SQL
+      location: opts.location,
+      useLegacySql: false,
+      dryRun: !!opts.dryRun,
+      destination,
+      writeDisposition: destination ? writeMap[opts.write] : undefined,
+      createDisposition: destination ? createMap[opts.create] : undefined,
+    };
+
+    try {
+      // Dry run path: returns bytes processed estimate
+      if (opts.dryRun) {
+        const [job] = await bigquery.createQueryJob(jobOptions);
+        const bytes = Number(job.metadata.statistics.totalBytesProcessed || 0);
+        console.log(
+          `✔ Dry run OK. Estimated bytes: ${bytes.toLocaleString()} (${(
+            bytes / 1e9
+          ).toFixed(2)} GB)`
+        );
+        process.exit(0);
+      }
+
+      // Execute
+      const [job] = await bigquery.createQueryJob(jobOptions);
+      console.log(
+        `Job ${job.id} started in ${opts.location}. Waiting for results...`
+      );
+      const [rows] = await job.getQueryResults();
+
+      if (destination) {
+        // materialized to table; print basic stats
+        const totalRows = Number(job.metadata.statistics.query?.totalRows ?? 0);
+        console.log(
+          `✔ Query finished. Wrote ${totalRows.toLocaleString()} rows to ${
+            opts.project
+          }.${opts.dataset}.${opts.dest}`
+        );
+      } else {
+        // no destination: print a compact table preview
+        printRowsPreview(rows);
+      }
+
+      // Optional intraday union helper (documented in SQL example below)
+      if (opts.includeIntraday) {
+        console.log(
+          "Note: include-intraday is a hint for your SQL. Use UNION ALL with events_intraday_* in the query."
+        );
+      }
+    } catch (err) {
+      // Surface useful errors
+      const meta = err?.errors?.[0];
+      console.error("BigQuery error:", meta?.message || err.message || err);
+      process.exit(1);
+    }
+  });
+
+// --- helpers for bq command ---
+function collectParams(value, prev) {
+  // supports: --param from_sfx=20250901 --param to_sfx=20250930 --param country=US
+  const [k, ...rest] = value.split("=");
+  const v = rest.join("="); // allow '=' in value
+  // try JSON parse (so numbers/bools work), else keep as string
+  prev[k] = tryJson(v);
+  return prev;
+}
+function tryJson(v) {
+  try {
+    return JSON.parse(v);
+  } catch {
+    return v;
+  }
+}
+function buildSuffixParams(fromISO, toISO) {
+  // Convert YYYY-MM-DD to 'YYYYMMDD' strings for _TABLE_SUFFIX filters
+  const out = {};
+  if (fromISO) out.from_sfx = fromISO.replace(/-/g, "");
+  if (toISO) out.to_sfx = toISO.replace(/-/g, "");
+  return out;
+}
+function printRowsPreview(rows, limit = 50) {
+  if (!rows?.length) {
+    console.log("✔ Query finished. 0 rows.");
+    return;
+  }
+  const keys = Object.keys(rows[0] || {});
+  const sample = rows.slice(0, limit);
+  const widths = keys.map((k) =>
+    Math.max(k.length, ...sample.map((r) => String(r[k] ?? "").length), 6)
+  );
+  const pad = (s, n) => String(s ?? "").padEnd(n, " ");
+  const sep = "+" + widths.map((w) => "-".repeat(w + 2)).join("+") + "+";
+  console.log(sep);
+  console.log(
+    "|" + keys.map((k, i) => " " + pad(k, widths[i]) + " ").join("|") + "|"
+  );
+  console.log(sep);
+  for (const r of sample) {
+    console.log(
+      "|" + keys.map((k, i) => " " + pad(r[k], widths[i]) + " ").join("|") + "|"
+    );
+  }
+  console.log(sep);
+  if (rows.length > limit)
+    console.log(`(showing ${limit} of ${rows.length} rows)`);
 }
 
 /* -----------------------------------------------------------------------------
