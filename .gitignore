@@ -36,3 +36,7 @@ yarn.lock
 
 # Optional: test output
 /test-output/
+
+# ignore any accidentally added service account keys
+*.p12
+**/keys/**
