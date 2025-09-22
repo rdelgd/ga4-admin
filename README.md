@@ -1,6 +1,6 @@
 # Google Analytics Administration, Analysis and Reporting (`gaaar`)
 
-CLI tool to programmatically administer GA4 properties and run custom reports with an "everything-as-code" approach.
+CLI tool to programmatically administer GA4 properties, run custom reports, and analyze BigQuery data with an "everything-as-code" approach.
 
 ## Installation
 
@@ -12,7 +12,7 @@ Now you can use the `gaaar` command from anywhere!
 
 ## Commands
 
-### Channel Management
+### Channel Management (GA4 Administration)
 
 Add AI-related traffic sources to your GA4 custom channel groups.
 
@@ -101,6 +101,58 @@ gaaar reports -s specs/weekly_kpis.json -f csv -o reports/weekly_kpis.csv
 ```
 
 See the `specs/` directory for more examples.
+
+### BigQuery Analysis
+
+Run SQL queries against your GA4 BigQuery export data with advanced templating and parameterization.
+
+```bash
+# Show help for bq command
+gaaar bq --help
+
+# Run a SQL file against GA4 export
+gaaar bq --project my-gcp-project --dataset analytics_123456789 --sql sql/ai_sources_daily.sql
+
+# Use inline SQL query
+gaaar bq --project my-project --dataset ga4_export --query "SELECT event_date, COUNT(*) as events FROM \`{{project}}.{{dataset}}.events_*\` WHERE _TABLE_SUFFIX BETWEEN '20240901' AND '20240930' GROUP BY event_date ORDER BY event_date"
+
+# Add date range parameters (automatically creates @from_sfx and @to_sfx params)
+gaaar bq --project my-project --dataset ga4_export --sql sql/ai_sources_daily.sql --from 2024-09-01 --to 2024-09-30
+
+# Add custom named parameters
+gaaar bq --project my-project --dataset ga4_export --sql sql/ai_sources_daily.sql --param needle="chatgpt" --param country="US"
+
+# Save results to a BigQuery table
+gaaar bq --project my-project --dataset ga4_export --sql sql/ai_sources_daily.sql --dest ai_traffic_daily
+
+# Overwrite existing table
+gaaar bq --project my-project --dataset ga4_export --sql sql/ai_sources_daily.sql --dest ai_traffic_daily --write truncate
+
+# Dry run to estimate query cost
+gaaar bq --project my-project --dataset ga4_export --sql sql/ai_sources_daily.sql --dry-run
+```
+
+#### SQL Template Features
+
+**Project & Dataset Substitution** - Use `{{project}}` and `{{dataset}}` placeholders in your SQL:
+```sql
+FROM `{{project}}.{{dataset}}.events_*`
+```
+
+**Named Parameters** - Use `@parameter_name` in SQL with `--param` flags:
+```sql
+WHERE _TABLE_SUFFIX BETWEEN @from_sfx AND @to_sfx
+  AND LOWER(source) LIKE CONCAT('%', LOWER(@needle), '%')
+```
+
+**Date Range Automation** - `--from` and `--to` flags automatically create suffix parameters:
+- `--from 2024-09-01 --to 2024-09-30` creates `@from_sfx="20240901"` and `@to_sfx="20240930"`
+
+**Table Management Options**:
+- `--write append` (default) - Add rows to existing table
+- `--write truncate` - Replace all table data
+- `--create ifneeded` (default) - Create table if it doesn't exist
+- `--create never` - Fail if table doesn't exist
 
 ### Global Options
 

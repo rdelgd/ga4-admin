@@ -19,7 +19,7 @@ const program = new Command();
 program
   .name("gaaar")
   .description("GA4 Admin + Data CLI: channel groups & programmatic reports")
-  .version("1.1.0");
+  .version("0.x.x");
 
 /* -----------------------------------------------------------------------------
  * Subcommand: channels
