@@ -1,7 +1,7 @@
 {
   "name": "gaaar",
   "version": "0.x.x",
-  "description": "CLI tool for programmatically administering GA4 properties and creating reports",
+  "description": "CLI tool for programmatically administering GA4 properties, creating reports, and analyzing GA4 BigQuery export data.",
   "main": "index.mjs",
   "type": "module",
   "bin": {

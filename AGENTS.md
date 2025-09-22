@@ -1,95 +1,156 @@
-# Development Guide
+## gaaar — docs and developer notes
 
-This file provides development guidance and documentation for working with code in this repository.
+This repository contains a small CLI utility (single-file) for interacting with
+Google Analytics 4 (GA4) and BigQuery. The entry point is `index.mjs` and the
+CLI exposes three main subcommands: `channels`, `reports`, and `bq`.
 
-## Project Overview
+This document describes current behavior, flags, examples, configuration,
+and implementation notes so contributors and users can run and maintain the
+tool.
 
-This is a Node.js tool for programmatically administering Google Analytics 4 (GA4) properties. The tool specifically manages custom channel groups by adding predefined AI traffic source channels to existing channel groups.
+## Summary of commands
 
-## Key Development Commands
+- `channels` — Manage GA4 custom channel groups (append predefined AI source rules).
+- `reports` — Run GA4 Data API reports from a JSON spec (standard/pivot/realtime).
+- `bq` — Run BigQuery SQL against a GA4 export; optionally write results to a table.
 
-### Running the Application
+All commands are invoked via the top-level script:
+
 ```bash
-# Run with property ID via CLI flag
-node index.mjs --property=properties/123456789
-
-# Short flag version
-node index.mjs -p properties/123456789
-
-# Override default channel group name
-node index.mjs -p properties/123456789 -g "Custom Channel Group"
-
-# Use environment variable (requires GA4_PROPERTY_ID in .env)
-node index.mjs
+# from the repo root
+node index.mjs <command> [options]
 ```
 
-### Setup and Dependencies
+## 1) channels
+
+Purpose: find a non-system channel group by display name and append missing
+AI-source grouping rules defined in the repository.
+
+Key flags / env:
+- `-p, --property <propertyId>` — GA4 property id, e.g. `properties/123456789`.
+	Can also be provided via `GA4_PROPERTY_ID` env var.
+- `-g, --group <groupName>` — target channel group display name (default: "Custom Channel Group").
+
+Behavior:
+- Uses the Analytics Admin API (`@google-analytics/admin` v1alpha) to list
+	channel groups on the property and match the display name case-insensitively.
+- Skips system-defined groups.
+- Compares existing grouping rules to the built-in `CHANNEL_SPECS` and only
+	appends rules that are missing (avoids duplicates).
+- Prints added channels on success.
+
+Example:
+
 ```bash
-# Install dependencies
+# append AI channels to "Custom Channel Group" on property
+node index.mjs channels -p properties/123456789 -g "Custom Channel Group"
+```
+
+Notes:
+- The built-in AI channel specs live in `index.mjs` (display names like
+	"ChatGPT - AI", match on `source` contains `chatgpt`, etc.).
+
+## 2) reports
+
+Purpose: run GA4 Data API reports defined as JSON specs (everything-as-code).
+
+Key flags / spec fields:
+- `-s, --spec <path>` — required. Path to the JSON spec that defines the report.
+- `-p, --property <propertyId>` — GA4 property id, can also be set in the spec
+	(spec.property) or via `GA4_PROPERTY_ID` env var.
+- `-f, --format <fmt>` — one of `csv|json|ndjson|table` (default: `table`).
+- `-o, --out <path>` — write output to a file instead of stdout.
+
+Supported report types (set `reportType` in the spec):
+- `standard` (default) — paginated `runReport` with dimensions/metrics/filters.
+- `pivot` — runs `runPivotReport` and returns the raw pivot response.
+- `realtime` — runs `runRealtimeReport` for minute ranges and activeUsers.
+
+Behavior / output formats:
+- `csv` — prints a CSV with dimension and metric columns.
+- `json` — pretty-printed JSON response.
+- `ndjson` — newline-delimited JSON records (one object per row).
+- `table` — human-friendly ASCII table printed to stdout.
+
+Example:
+
+```bash
+node index.mjs reports -s specs/weekly_kpis.json -p properties/123456789 -f csv -o out/kpis.csv
+```
+
+Tip: If `property` is present in the spec JSON, you can omit `-p`.
+
+## 3) bq
+
+Purpose: run SQL against a BigQuery dataset (commonly the GA4 export dataset)
+and optionally write results into a destination table.
+
+Key flags:
+- `--project <projectId>` — GCP project id (required).
+- `--dataset <dataset>` — BigQuery dataset name (required).
+- `--sql <path>` or `--query <text>` — one of these is required.
+- `--dest <table>` — optional destination table name to materialize results.
+- `--write <mode>` — `append|truncate|empty` (default: `append`).
+- `--create <mode>` — `ifneeded|never` (default: `ifneeded`).
+- `--location <loc>` — dataset location (default: `US`).
+- `--from <YYYY-MM-DD>` / `--to <YYYY-MM-DD>` — helper params used to
+	construct `_TABLE_SUFFIX` params for templated SQL.
+- `--include-intraday` — informational hint to the user about intraday tables.
+- `--param <k=v>` — repeatable; adds named parameters available as `@k` in SQL.
+- `--dry-run` — validate & estimate bytes without running.
+
+Behavior:
+- Supports reading an SQL file and performing simple template replacements:
+	`{{project}}` and `{{dataset}}` are substituted from CLI flags.
+- Adds `from_sfx` and `to_sfx` params (YYYYMMDD) when `--from`/`--to` are used
+	to make it easier to query `events_*` wildcard tables.
+- When `--dest` is supplied, creates a destination table (CREATE TABLE AS SELECT)
+	using the provided `--write` and `--create` options.
+
+Example:
+
+```bash
+node index.mjs bq --project my-proj --dataset ga4_export --sql sql/ai_sources_daily.sql --from 2025-09-01 --to 2025-09-21 --dest my_temp.table_name
+```
+
+## Environment and auth
+
+- `GOOGLE_APPLICATION_CREDENTIALS` — path to service account key JSON (optional if
+	using Application Default Credentials). Required for both Admin API and BigQuery
+	client auth when not using ADC.
+- `GA4_PROPERTY_ID` — optional default GA4 property id (format `properties/NNN`).
+
+Ensure the service account has the necessary roles and that the account email
+is granted Editor (or equivalent) on the GA4 property for Admin API calls.
+
+## Development / contributor notes
+
+- Entry point: `index.mjs` — small procedural CLI implemented with `commander`.
+- Dependencies are declared in `package.json` — run `npm install` to set up.
+- The repository contains a few example spec files in `specs/` and an example
+	SQL in `sql/` to show how the `bq` command is expected to be used.
+
+Quick start:
+
+```bash
 npm install
-
-# Copy environment template
-cp .env.example .env
+# set GOOGLE_APPLICATION_CREDENTIALS and (optionally) GA4_PROPERTY_ID
+node index.mjs channels -p properties/123456789
 ```
 
-### Testing
-Currently no test suite is configured (package.json shows placeholder test command).
+Small improvements you can contribute:
+- Add unit tests for CSV/NDJSON/pretty table formatting functions.
+- Split commands into modules for easier testing and extension.
+- Add clearer exit codes and error types for CI-friendly automation.
 
-## Code Architecture
+## Files of interest
 
-### Single-File Architecture
-This is a simple, single-file Node.js application (`index.mjs`) with no complex module structure. The architecture follows a straightforward procedural approach:
+- `index.mjs` — CLI and implementation.
+- `specs/` — JSON report specs used by the `reports` command.
+- `sql/` — example SQL used by the `bq` command.
 
-1. **CLI Argument Parsing**: Custom lightweight flag parser (no external CLI library dependency)
-2. **Configuration Management**: Combines CLI flags with environment variables, with CLI taking precedence
-3. **Google Analytics Integration**: Uses `@google-analytics/admin` v1alpha API with Google Auth Library
-4. **Channel Management Logic**: Defines predefined AI channel specifications and manages their addition to existing channel groups
+---
 
-### Key Components
-
-- **CHANNEL_SPECS**: Array of predefined AI traffic sources (ChatGPT, Perplexity, Gemini, Copilot, Claude, Meta)
-- **Authentication**: Uses Google Auth Library with service account credentials
-- **Channel Group Operations**: Finds non-system-defined channel groups and appends missing AI channels
-- **Rule Building**: Converts channel specifications to GA4 API grouping rules format
-
-### Data Flow
-1. Parse CLI arguments and validate property ID
-2. Authenticate with Google Analytics Admin API
-3. Find target channel group by display name
-4. Compare existing rules with predefined channel specs
-5. Add only missing channels to avoid duplicates
-6. Update channel group via API
-
-## Environment Configuration
-
-### Required Environment Variables
-- `GOOGLE_APPLICATION_CREDENTIALS`: Path to Google Cloud service account JSON key file
-- `GA4_PROPERTY_ID`: GA4 property ID in format "properties/XXXXXXXXX" (can be overridden via CLI)
-
-### Google Cloud Setup Requirements
-- Google Cloud project with Analytics Admin API enabled
-- Service account with "Google Analytics Admin" role
-- Service account email added to GA4 property with Editor permissions
-- Downloaded service account JSON key file
-
-## Important Implementation Details
-
-### CLI Flag Handling
-The tool implements a custom CLI parser that supports both long and short flags:
-- `--property` / `-p`: GA4 property ID
-- `--group` / `-g`: Channel group display name
-
-### Channel Group Targeting
-- Only operates on non-system-defined channel groups
-- Matches channel groups by display name (case-insensitive)
-- Default target group name: "Custom Channel Group"
-
-### API Field Mapping
-- UI field name "source" maps to API field "eachScopeSource"
-- Match type "CONTAINS" maps to API enum value 4
-- All channels use case-insensitive string matching
-
-### Error Handling
-- Validates property ID format (must start with "properties/")
-- Provides detailed error messages for missing configuration
-- Includes API response debugging for REST fallback scenarios
+What I changed: updated this document to reflect the current CLI subcommands
+(`channels`, `reports`, `bq`), their exact flags, formats, and examples. Next
+I'll mark the todo as completed and verify the saved file.
