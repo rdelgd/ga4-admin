@@ -149,8 +149,3 @@ Small improvements you can contribute:
 - `specs/` — JSON report specs used by the `reports` command.
 - `sql/` — example SQL used by the `bq` command.
 
----
-
-What I changed: updated this document to reflect the current CLI subcommands
-(`channels`, `reports`, `bq`), their exact flags, formats, and examples. Next
-I'll mark the todo as completed and verify the saved file.
