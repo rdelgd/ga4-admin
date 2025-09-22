@@ -12,9 +12,9 @@ Now you can use the `gaaar` command from anywhere!
 
 ## Commands
 
-### Channel Management (GA4 Administration)
+### Channel Management (GA4 Administration example/demo)
 
-Add AI-related traffic sources to your GA4 custom channel groups.
+Add AI-related traffic sources to your GA4 custom channel groups. This command is intended as a reference/demo example that can be modified or extended. 
 
 ```bash
 # Show help for channels command
