@@ -111,7 +111,7 @@ Run SQL queries against your GA4 BigQuery export data with advanced templating a
 gaaar bq --help
 
 # Run a SQL file against GA4 export
-gaaar bq --project my-gcp-project --dataset analytics_123456789 --sql sql/ai_sources_daily.sql
+gaaar bq --project my-project --dataset ga4_export --sql sql/ai_sources_daily.sql
 
 # Use inline SQL query
 gaaar bq --project my-project --dataset ga4_export --query "SELECT event_date, COUNT(*) as events FROM \`{{project}}.{{dataset}}.events_*\` WHERE _TABLE_SUFFIX BETWEEN '20240901' AND '20240930' GROUP BY event_date ORDER BY event_date"
