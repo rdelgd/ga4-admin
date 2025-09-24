@@ -166,10 +166,13 @@ gaaar --help
 
 ## Requirements
 
-- Node.js
-- Google Analytics Admin API 
-- Google Analytics Data API 
-- Google BigQuery API  
-- A GA4 property with a custom channel group
+- Node.js 18+
+- Google Cloud Platform project with the following APIs enabled:
+  - Google Analytics Admin API (for `channels` command)
+  - Google Analytics Data API (for `reports` command)
+  - BigQuery API (for `bq` command)
+- Service account with appropriate permissions
+- A GA4 property with a custom channel group (for channels command)
+- Access to GA4 BigQuery export dataset (for bq command)
 
 **Important:** See the `.env.example` file for detailed instructions on how to set up the required Google Cloud Platform (GCP) configurations, including service account setup, API enablement, and authentication credentials.
