@@ -1,6 +1,6 @@
 # Google Analytics Administration, Analysis and Reporting (`gaaar`)
 
-CLI tool to programmatically administer GA4 properties, run custom reports, and analyze BigQuery data with an "everything-as-code" approach.
+CLI tool to programmatically administer GA4 properties, run custom reports, and analyze BigQuery data with an "[everything-as-code](https://mitchellh.com/writing/as-code)" approach.
 
 ## Installation
 
