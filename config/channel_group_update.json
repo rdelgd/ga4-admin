@@ -1,0 +1,46 @@
+
+{
+  "resourceType": "channelGroup",
+  "action": "update",
+  "config": {
+    "displayName": "Custom Channel Group",
+    "rules": [
+      {
+        "displayName": "ChatGPT - AI",
+        "fieldName": "source",
+        "matchType": "CONTAINS",
+        "value": "chatgpt"
+      },
+      {
+        "displayName": "Perplexity - AI",
+        "fieldName": "source",
+        "matchType": "CONTAINS",
+        "value": "perplexity"
+      },
+      {
+        "displayName": "Gemini - AI",
+        "fieldName": "source",
+        "matchType": "CONTAINS",
+        "value": "gemini"
+      },
+      {
+        "displayName": "Copilot.microsoft - AI",
+        "fieldName": "source",
+        "matchType": "CONTAINS",
+        "value": "copilot.microsoft"
+      },
+      {
+        "displayName": "Claude - AI",
+        "fieldName": "source",
+        "matchType": "CONTAINS",
+        "value": "claude"
+      },
+      {
+        "displayName": "Meta - AI",
+        "fieldName": "source",
+        "matchType": "CONTAINS",
+        "value": "meta"
+      }
+    ]
+  }
+}

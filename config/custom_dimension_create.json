@@ -1,0 +1,10 @@
+{
+  "resourceType": "customDimensions",
+  "action": "create",
+  "dimension": {
+    "parameterName": "ai_source",
+    "displayName": "AI Source",
+    "description": "Source of AI-generated content",
+    "scope": "EVENT"
+  }
+}

@@ -22,26 +22,26 @@ program
   .version("0.1.0");
 
 /* -----------------------------------------------------------------------------
- * Subcommand: channels
+ * Subcommand: admin
  * ---------------------------------------------------------------------------*/
 program
-  .command("channels")
-  .description("Manage GA4 custom channel groups (append AI sources)")
+  .command("admin")
+  .description("Manage GA4 resources from a JSON spec file.")
   .requiredOption(
     "-p, --property <propertyId>",
     "GA4 property ID (e.g., properties/123456789)",
     process.env.GA4_PROPERTY_ID
   )
-  .option(
-    "-g, --group <groupName>",
-    "Target channel group display name",
-    "Custom Channel Group"
-  )
+  .requiredOption("-s, --spec <path>", "Path to admin spec JSON file")
   .action(async (opts) => {
     const PROPERTY_ID = opts.property || process.env.GA4_PROPERTY_ID;
-    const TARGET_GROUP_DISPLAY_NAME = (
-      opts.group || "Custom Channel Group"
-    ).trim();
+    const SPEC_PATH = path.resolve(opts.spec);
+
+    if (!fs.existsSync(SPEC_PATH)) {
+      console.error("Spec file not found:", SPEC_PATH);
+      process.exit(1);
+    }
+    const spec = JSON.parse(fs.readFileSync(SPEC_PATH, "utf8"));
 
     if (!PROPERTY_ID) {
       console.error(
@@ -58,7 +58,28 @@ program
     }
 
     try {
-      await appendAiChannels(PROPERTY_ID, TARGET_GROUP_DISPLAY_NAME);
+      const { resourceType, action, ...config } = spec;
+      if (!resourceType || !action) {
+        throw new Error(
+          'Spec file must contain "resourceType" and "action" fields.'
+        );
+      }
+      switch (resourceType) {
+        case "channelGroup":
+          await handleChannelGroup(PROPERTY_ID, action, config);
+          break;
+        case "googleAdsLinks":
+          await handleGoogleAdsLinks(PROPERTY_ID, action, config);
+          break;
+        case "customDimensions":
+          await handleCustomDimensions(PROPERTY_ID, action, config);
+          break;
+        case "customMetrics":
+          await handleCustomMetrics(PROPERTY_ID, action, config);
+          break;
+        default:
+          throw new Error(`Unsupported resourceType: ${resourceType}`);
+      }
     } catch (err) {
       console.error("Error:", err?.message || err);
       if (err?.response?.data) {
@@ -70,46 +91,6 @@ program
       process.exit(1);
     }
   });
-
-// ---- Channel specs (extend as needed) ----
-const CHANNEL_SPECS = [
-  {
-    displayName: "ChatGPT - AI",
-    fieldName: "source",
-    matchType: "CONTAINS",
-    value: "chatgpt",
-  },
-  {
-    displayName: "Perplexity - AI",
-    fieldName: "source",
-    matchType: "CONTAINS",
-    value: "perplexity",
-  },
-  {
-    displayName: "Gemini - AI",
-    fieldName: "source",
-    matchType: "CONTAINS",
-    value: "gemini",
-  },
-  {
-    displayName: "Copilot.microsoft - AI",
-    fieldName: "source",
-    matchType: "CONTAINS",
-    value: "copilot.microsoft",
-  },
-  {
-    displayName: "Claude - AI",
-    fieldName: "source",
-    matchType: "CONTAINS",
-    value: "claude",
-  },
-  {
-    displayName: "Meta - AI",
-    fieldName: "source",
-    matchType: "CONTAINS",
-    value: "meta",
-  },
-];
 
 // ---- Auth & Admin client (v1alpha) ----
 const auth = new GoogleAuth({
@@ -168,7 +149,18 @@ function hasRuleByDisplayName(rules = [], name) {
   return rules.some((r) => (r.displayName || "").toLowerCase() === needle);
 }
 
-async function appendAiChannels(propertyId, targetGroupDisplayName) {
+async function handleChannelGroup(propertyId, action, config) {
+  switch (action) {
+    case "update":
+      await updateChannelGroup(propertyId, config);
+      break;
+    default:
+      throw new Error(`Unsupported action for channelGroup: ${action}`);
+  }
+}
+
+async function updateChannelGroup(propertyId, spec) {
+  const targetGroupDisplayName = (spec.displayName || "").trim();
   console.log(
     `\n→ Property: ${propertyId}\n→ Channel Group: "${targetGroupDisplayName}"\n`
   );
@@ -184,9 +176,11 @@ async function appendAiChannels(propertyId, targetGroupDisplayName) {
   }
 
   const currentRules = target.groupingRule || [];
-  const toAdd = CHANNEL_SPECS.filter(
+  const desiredRules = (spec.rules || []).map(buildGroupingRule);
+
+  const toAdd = desiredRules.filter(
     (spec) => !hasRuleByDisplayName(currentRules, spec.displayName)
-  ).map(buildGroupingRule);
+  );
 
   if (toAdd.length === 0) {
     console.log(
@@ -205,6 +199,162 @@ async function appendAiChannels(propertyId, targetGroupDisplayName) {
   console.log(`Updated "${resp.displayName}" (${resp.name}). Added channels:`);
   toAdd.forEach((r) => console.log(`- ${r.displayName}`));
 }
+
+async function handleGoogleAdsLinks(propertyId, action, config) {
+  switch (action) {
+    case "list":
+      const [links] = await adminClient.listGoogleAdsLinks({ parent: propertyId });
+      printGoogleAdsLinks(links);
+      break;
+    default:
+      throw new Error(`Unsupported action for googleAdsLinks: ${action}`);
+  }
+}
+
+function printGoogleAdsLinks(links) {
+  if (!links?.length) {
+    console.log("No Google Ads links found.");
+    return;
+  }
+
+  const cols = ["Customer ID", "Can Manage Clients", "Creator Email"];
+  const rows = links.map(link => [
+    link.adsPersonalizationEnabled,
+    link.canManageClients,
+    link.creatorEmailAddress,
+  ]);
+
+  const widths = cols.map((c, i) =>
+    Math.max(c.length, ...rows.map(row => String(row[i] ?? "").length), 6)
+  );
+  const pad = (str, n) => String(str ?? "").padEnd(n, " ");
+  const sep = "+" + widths.map(w => "-".repeat(w + 2)).join("+") + "+";
+
+  console.log(sep);
+  console.log(
+    "|" + cols.map((c, i) => " " + pad(c, widths[i]) + " ").join("|") + "|"
+  );
+  console.log(sep);
+  for (const r of rows) {
+    console.log(
+      "|" + r.map((v, i) => " " + pad(v, widths[i]) + " ").join("|") + "|"
+    );
+  }
+  console.log(sep);
+}
+
+async function handleCustomDimensions(propertyId, action, config) {
+  switch (action) {
+    case "list":
+      const [dimensions] = await adminClient.listCustomDimensions({ parent: propertyId });
+      printCustomDimensions(dimensions);
+      break;
+    case "create":
+      const { dimension } = config;
+      if (!dimension) {
+        throw new Error('Spec for creating custom dimension must contain a "dimension" field.');
+      }
+      const [createdDimension] = await adminClient.createCustomDimension({
+        parent: propertyId,
+        customDimension: dimension,
+      });
+      console.log("Created custom dimension:");
+      printCustomDimensions([createdDimension]);
+      break;
+    default:
+      throw new Error(`Unsupported action for customDimensions: ${action}`);
+  }
+}
+
+function printCustomDimensions(dimensions) {
+  if (!dimensions?.length) {
+    console.log("No custom dimensions found.");
+    return;
+  }
+
+  const cols = ["Name", "Parameter Name", "Scope", "Description"];
+  const rows = dimensions.map(dim => [
+    dim.name,
+    dim.parameterName,
+    dim.scope,
+    dim.description,
+  ]);
+
+  const widths = cols.map((c, i) =>
+    Math.max(c.length, ...rows.map(row => String(row[i] ?? "").length), 6)
+  );
+  const pad = (str, n) => String(str ?? "").padEnd(n, " ");
+  const sep = "+" + widths.map(w => "-".repeat(w + 2)).join("+") + "+";
+
+  console.log(sep);
+  console.log(
+    "|" + cols.map((c, i) => " " + pad(c, widths[i]) + " ").join("|") + "|"
+  );
+  console.log(sep);
+  for (const r of rows) {
+    console.log(
+      "|" + r.map((v, i) => " " + pad(v, widths[i]) + " ").join("|") + "|"
+    );
+  }
+  console.log(sep);
+}
+
+async function handleCustomMetrics(propertyId, action, config) {
+  switch (action) {
+    case "list":
+      const [metrics] = await adminClient.listCustomMetrics({ parent: propertyId });
+      printCustomMetrics(metrics);
+      break;
+    case "create":
+      const { metric } = config;
+      if (!metric) {
+        throw new Error('Spec for creating custom metric must contain a "metric" field.');
+      }
+      const [createdMetric] = await adminClient.createCustomMetric({
+        parent: propertyId,
+        customMetric: metric,
+      });
+      console.log("Created custom metric:");
+      printCustomMetrics([createdMetric]);
+      break;
+    default:
+      throw new Error(`Unsupported action for customMetrics: ${action}`);
+  }
+}
+
+function printCustomMetrics(metrics) {
+  if (!metrics?.length) {
+    console.log("No custom metrics found.");
+    return;
+  }
+
+  const cols = ["Name", "Parameter Name", "Measurement Unit", "Description"];
+  const rows = metrics.map(metric => [
+    metric.name,
+    metric.parameterName,
+    metric.measurementUnit,
+    metric.description,
+  ]);
+
+  const widths = cols.map((c, i) =>
+    Math.max(c.length, ...rows.map(row => String(row[i] ?? "").length), 6)
+  );
+  const pad = (str, n) => String(str ?? "").padEnd(n, " ");
+  const sep = "+" + widths.map(w => "-".repeat(w + 2)).join("+") + "+";
+
+  console.log(sep);
+  console.log(
+    "|" + cols.map((c, i) => " " + pad(c, widths[i]) + " ").join("|") + "|"
+  );
+  console.log(sep);
+  for (const r of rows) {
+    console.log(
+      "|" + r.map((v, i) => " " + pad(v, widths[i]) + " ").join("|") + "|"
+    );
+  }
+  console.log(sep);
+}
+
 
 /* -----------------------------------------------------------------------------
  * Subcommand: reports

@@ -12,35 +12,24 @@ Now you can use the `gaaar` command from anywhere!
 
 ## Commands
 
-### Channel Management (GA4 Administration example/demo)
+### Admin
 
-Add AI-related traffic sources to your GA4 custom channel groups. This command is intended as a reference/demo example that can be modified or extended. 
+Administer GA4 resources from a JSON spec file. 
 
 ```bash
-# Show help for channels command
-gaaar channels --help
+# Show help for admin command
+gaaar admin --help
 
-# Target a specific property
-gaaar channels --property properties/123456789
+# Target a specific property and spec file
+gaaar admin --property properties/123456789 --spec config/channel_group.json
 
-# Use short flag
-gaaar channels -p properties/123456789
-
-# Override the channel group name
-gaaar channels -p properties/123456789 -g "Custom Channel Group"
+# Use short flags
+gaaar admin -p properties/123456789 -s config/channel_group.json
 
 # Use environment variable
 export GA4_PROPERTY_ID="properties/123456789"
-gaaar channels
+gaaar admin -s config/channel_group.json
 ```
-
-This command automatically creates channels for:
-- ChatGPT - AI
-- Perplexity - AI  
-- Gemini - AI
-- Copilot.microsoft - AI
-- Claude - AI
-- Meta - AI
 
 The tool will only add channels that don't already exist in your target channel group.
 
@@ -65,7 +54,7 @@ gaaar reports -s specs/weekly_kpis.json -f csv
 gaaar reports -s specs/weekly_kpis.json -f csv -o reports/weekly_kpis.csv
 ```
 
-#### Report Types
+#### Report example:
 
 **Standard Reports** - Regular GA4 reports with dimensions and metrics
 ```json
@@ -76,27 +65,6 @@ gaaar reports -s specs/weekly_kpis.json -f csv -o reports/weekly_kpis.csv
   "dateRanges": [{ "startDate": "7daysAgo", "endDate": "yesterday" }],
   "orderBys": [{ "metric": { "metricName": "sessions" }, "desc": true }],
   "limit": 100000
-}
-```
-
-**Pivot Reports** - Cross-tabulated data with pivot tables
-```json
-{
-  "reportType": "pivot",
-  "dimensions": ["sessionDefaultChannelGroup", "deviceCategory"],
-  "metrics": ["sessions"],
-  "pivots": [
-    { "fieldNames": ["sessionDefaultChannelGroup"], "limit": 25 }
-  ]
-}
-```
-
-**Realtime Reports** - Live data from the last 30 minutes
-```json
-{
-  "reportType": "realtime",
-  "dimensions": ["country", "deviceCategory"],
-  "metrics": ["activeUsers"]
 }
 ```
 

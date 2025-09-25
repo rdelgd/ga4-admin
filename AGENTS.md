@@ -10,7 +10,7 @@ tool.
 
 ## Summary of commands
 
-- `channels` — Manage GA4 custom channel groups (append predefined AI source rules).
+- `admin` — Manage GA4 resources from a JSON spec file.
 - `reports` — Run GA4 Data API reports from a JSON spec (standard/pivot/realtime).
 - `bq` — Run BigQuery SQL against a GA4 export; optionally write results to a table.
 
@@ -21,21 +21,21 @@ All commands are invoked via the top-level script:
 node index.mjs <command> [options]
 ```
 
-## 1) channels
+## 1) admin
 
 Purpose: find a non-system channel group by display name and append missing
-AI-source grouping rules defined in the repository.
+AI-source grouping rules defined in a JSON spec file.
 
 Key flags / env:
 - `-p, --property <propertyId>` — GA4 property id, e.g. `properties/123456789`.
 	Can also be provided via `GA4_PROPERTY_ID` env var.
-- `-g, --group <groupName>` — target channel group display name (default: "Custom Channel Group").
+- `-s, --spec <path>` — required. Path to the JSON spec that defines the admin task.
 
 Behavior:
 - Uses the Analytics Admin API (`@google-analytics/admin` v1alpha) to list
 	channel groups on the property and match the display name case-insensitively.
 - Skips system-defined groups.
-- Compares existing grouping rules to the built-in `CHANNEL_SPECS` and only
+- Compares existing grouping rules to the rules in the spec file and only
 	appends rules that are missing (avoids duplicates).
 - Prints added channels on success.
 
@@ -43,12 +43,11 @@ Example:
 
 ```bash
 # append AI channels to "Custom Channel Group" on property
-node index.mjs channels -p properties/123456789 -g "Custom Channel Group"
+node index.mjs admin -p properties/123456789 -s config/channel_group.json
 ```
 
 Notes:
-- The built-in AI channel specs live in `index.mjs` (display names like
-	"ChatGPT - AI", match on `source` contains `chatgpt`, etc.).
+- The AI channel specs now live in `config/channel_group.json`.
 
 ## 2) reports
 
